@@ -1,5 +1,15 @@
 import type { TopicScore } from './score.js'
 
+/**
+ * Sanitizes a topic string for markdown table interpolation.
+ * Escapes pipe characters and collapses newlines into single spaces.
+ */
+function sanitizeTopicForTable(topic: string): string {
+  return topic
+    .replace(/\|/g, '\\|') // Escape pipes
+    .replace(/\s*\n\s*/g, ' ') // Collapse newlines (with surrounding whitespace) to single space
+}
+
 export interface RunMeta {
   date: string
   sourceCounts: { source: string; count: number }[]
@@ -27,7 +37,7 @@ export function generateReport(scores: TopicScore[], meta: RunMeta): string {
   scores.forEach((s, i) => {
     const momentum = s.velocityReady ? `${Math.round(s.momentum * 100)}%` : '–'
     const links = s.urls.map((u, j) => `[${j + 1}](${u})`).join(' ')
-    lines.push(`| ${i + 1} | ${s.topic} | ${s.score.toFixed(2)} | ${momentum} | ${s.sources.join(', ')} | ${links} |`)
+    lines.push(`| ${i + 1} | ${sanitizeTopicForTable(s.topic)} | ${s.score.toFixed(2)} | ${momentum} | ${s.sources.join(', ')} | ${links} |`)
   })
 
   lines.push('')

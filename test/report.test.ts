@@ -52,4 +52,19 @@ describe('generateReport', () => {
     expect(md).toContain('hn: ✅ 30 signals')
     expect(md).toContain('google-trends: ❌ no data this run')
   })
+
+  it('escapes pipes and collapses newlines in topic names', () => {
+    const topicWithPipesAndNewlines = 'c | c++ pipes\nand newlines'
+    const md = generateReport([{ ...score, topic: topicWithPipesAndNewlines }], meta)
+    // Check that pipes are escaped
+    expect(md).toContain('c \\| c++')
+    // Check that newlines are collapsed to spaces
+    expect(md).toContain('pipes and newlines')
+    // Check that the row doesn't contain raw newlines (which would break the table)
+    const tableLines = md.split('\n')
+    const contentRow = tableLines.find(line => line.includes('c \\| c++'))
+    expect(contentRow).toBeDefined()
+    // Ensure the content row is a single line (no embedded newlines)
+    expect(contentRow).not.toContain('\n')
+  })
 })
