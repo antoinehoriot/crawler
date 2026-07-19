@@ -132,6 +132,7 @@ export function makeRedditCollector(subreddits: string[], delayMs = 1000, auth?:
             subSignals = parseRedditRss(await rssRes.text(), capturedAt)
           } catch (rssErr) {
             lastErr = rssErr
+            await sleep(delayMs)
             const topUrl = `https://www.reddit.com/r/${sub}/top.json?t=day&limit=25`
             const topRes = await fetchWithRetry(topUrl)
             subSignals = parseRedditTop(await topRes.json(), capturedAt)
