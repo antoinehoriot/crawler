@@ -74,18 +74,30 @@ export function scoreTopics(rows: SnapshotRow[], config: ScoreConfig, now: Date)
   const recentTopics = [...byTopic.keys()].filter((t) => byTopic.get(t)!.some(inWindow))
   const tokenCache = new Map(recentTopics.map((t) => [t, significantTokens(t)]))
 
-  // mean daily strength over the window starting `startAge` days ago
+  // mean daily strength over the window starting `startAge` days ago.
+  // Same-day duplicates of the same (source, metric) — e.g. two crawler runs in
+  // one day, or the same story surfacing from two queries — collapse to their
+  // max so a topic isn't inflated just because it was captured more than once.
+  // Distinct (source, metric) pairs on the same day still sum (cross-source signal).
   function windowStrength(topicRows: SnapshotRow[], startAge: number): number {
-    const byDay = new Map<string, number>()
+    const byDayGroup = new Map<string, Map<string, number>>()
     for (const r of topicRows) {
       const age = daysAgo(r.captured_at)
       if (age >= startAge && age < startAge + W) {
         const day = r.captured_at.slice(0, 10)
-        byDay.set(day, (byDay.get(day) ?? 0) + norm(r))
+        const groupKey = `${r.source}|${r.metric}`
+        let dayMap = byDayGroup.get(day)
+        if (!dayMap) {
+          dayMap = new Map()
+          byDayGroup.set(day, dayMap)
+        }
+        dayMap.set(groupKey, Math.max(dayMap.get(groupKey) ?? 0, norm(r)))
       }
     }
     let total = 0
-    for (const v of byDay.values()) total += v
+    for (const dayMap of byDayGroup.values()) {
+      for (const v of dayMap.values()) total += v
+    }
     return total / W
   }
 

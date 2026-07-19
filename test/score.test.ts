@@ -72,6 +72,19 @@ describe('scoreTopics', () => {
     expect(topics).toEqual(['current'])
   })
 
+  it('collapses same-day duplicate (source, metric) rows to their max, not their sum', () => {
+    const rows = [
+      row('single run', 'hn', 100, 10), row('single run', 'hn', 100, 2),
+      row('double run', 'hn', 100, 10),
+      row('double run', 'hn', 100, 2), row('double run', 'hn', 90, 2),
+    ]
+    const scores = scoreTopics(rows, config, NOW)
+    const single = scores.find((s) => s.topic === 'single run')!
+    const double = scores.find((s) => s.topic === 'double run')!
+    expect(double.momentum).toBe(single.momentum)
+    expect(double.score).toBeCloseTo(single.score)
+  })
+
   it('caps output at topN', () => {
     const rows = Array.from({ length: 40 }, (_, i) => row(`topic number ${i}`, 'hn', i + 1, 1))
     expect(scoreTopics(rows, config, NOW)).toHaveLength(30)
