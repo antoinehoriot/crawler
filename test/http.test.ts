@@ -46,4 +46,18 @@ describe('fetchWithRetry', () => {
     await expect(fetchWithRetry('https://example.com', { backoffMs: 1 })).rejects.toThrow('500')
     expect(mock).toHaveBeenCalledTimes(3)
   })
+
+  it('passes method and body through to fetch', async () => {
+    const mock = vi.fn().mockResolvedValue(res(200))
+    vi.stubGlobal('fetch', mock)
+    await fetchWithRetry('https://example.com/token', {
+      method: 'POST',
+      body: 'grant_type=client_credentials',
+      headers: { Authorization: 'Basic abc123' },
+    })
+    const init = mock.mock.calls[0][1] as RequestInit
+    expect(init.method).toBe('POST')
+    expect(init.body).toBe('grant_type=client_credentials')
+    expect((init.headers as Record<string, string>)['Authorization']).toBe('Basic abc123')
+  })
 })

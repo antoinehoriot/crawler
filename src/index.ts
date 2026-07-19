@@ -4,17 +4,28 @@ import { Store } from './store.js'
 import { scoreTopics } from './score.js'
 import { generateReport } from './report.js'
 import { hnCollector } from './collectors/hn.js'
-import { makeRedditCollector } from './collectors/reddit.js'
+import { makeRedditCollector, type RedditAuth } from './collectors/reddit.js'
 import { googleTrendsCollector } from './collectors/googleTrends.js'
 import type { Collector } from './collectors/types.js'
 
 const CONFIGURED_SOURCES = ['google-trends', 'hn', 'reddit']
 
+function redditAuthFromEnv(): RedditAuth | undefined {
+  const clientId = process.env.REDDIT_CLIENT_ID
+  const clientSecret = process.env.REDDIT_CLIENT_SECRET
+  const username = process.env.REDDIT_USERNAME
+  if (!clientId || !clientSecret) {
+    console.log('[collect] reddit: no credentials, using public endpoints')
+    return undefined
+  }
+  return { clientId, clientSecret, ...(username ? { username } : {}) }
+}
+
 async function collect(store: Store, config: Config): Promise<number> {
   const collectors: Collector[] = [
     googleTrendsCollector,
     hnCollector,
-    makeRedditCollector(config.subreddits),
+    makeRedditCollector(config.subreddits, 1000, redditAuthFromEnv()),
   ]
   let succeeded = 0
   for (const c of collectors) {

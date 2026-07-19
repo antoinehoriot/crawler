@@ -19,6 +19,10 @@ jobs:
       - run: npm ci
       - run: npm test
       - run: npm run go
+        env:
+          REDDIT_CLIENT_ID: ${{ secrets.REDDIT_CLIENT_ID }}
+          REDDIT_CLIENT_SECRET: ${{ secrets.REDDIT_CLIENT_SECRET }}
+          REDDIT_USERNAME: ${{ secrets.REDDIT_USERNAME }}
       - name: Commit snapshots and report
         run: |
           git config user.name "github-actions[bot]"

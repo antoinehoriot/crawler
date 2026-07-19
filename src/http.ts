@@ -5,12 +5,14 @@ export interface FetchOpts {
   timeoutMs?: number
   backoffMs?: number
   headers?: Record<string, string>
+  method?: string
+  body?: string
 }
 
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms))
 
 export async function fetchWithRetry(url: string, opts: FetchOpts = {}): Promise<Response> {
-  const { retries = 3, timeoutMs = 10_000, backoffMs = 1000, headers = {} } = opts
+  const { retries = 3, timeoutMs = 10_000, backoffMs = 1000, headers = {}, method, body } = opts
   let lastErr: unknown
   for (let attempt = 0; attempt < retries; attempt++) {
     if (attempt > 0) await sleep(backoffMs * 2 ** (attempt - 1))
@@ -18,6 +20,8 @@ export async function fetchWithRetry(url: string, opts: FetchOpts = {}): Promise
       const res = await fetch(url, {
         headers: { 'User-Agent': USER_AGENT, ...headers },
         signal: AbortSignal.timeout(timeoutMs),
+        ...(method !== undefined ? { method } : {}),
+        ...(body !== undefined ? { body } : {}),
       })
       if (res.ok) return res
       const err = new Error(`HTTP ${res.status} for ${url}`)
