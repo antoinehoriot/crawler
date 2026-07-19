@@ -20,6 +20,22 @@ describe('parseRedditTop', () => {
     })
   })
 
+  it('filters posts: keeps valid posts including score 0, skips missing title/permalink/non-numeric score', () => {
+    const payload = {
+      data: {
+        children: [
+          { data: { title: 'Valid with zero score', score: 0, permalink: '/r/test/comments/abc/' } },
+          { data: { score: 100, permalink: '/r/test/comments/def/' } }, // missing title
+          { data: { title: 'Missing permalink', score: 50 } }, // missing permalink
+          { data: { title: 'Non-numeric score', score: 'high', permalink: '/r/test/comments/ghi/' } }, // non-numeric score
+        ]
+      }
+    }
+    const signals = parseRedditTop(payload, AT)
+    expect(signals).toHaveLength(1)
+    expect(signals[0].value).toBe(0)
+  })
+
   it('returns [] on malformed payloads', () => {
     expect(parseRedditTop({}, AT)).toEqual([])
     expect(parseRedditTop(null, AT)).toEqual([])
