@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<feed xmlns="http://www.w3.org/2005/Atom">
+  <title>reddit: the front page of the internet</title>
+  <id>https://www.reddit.com/r/SaaS/top.rss?t=day</id>
+  <entry>
+    <title>My SaaS hit $1k MRR</title>
+    <link href="https://www.reddit.com/r/SaaS/comments/def/my_saas/" />
+    <id>t3_def</id>
+    <updated>2026-07-19T04:00:00+00:00</updated>
+  </entry>
+  <entry>
+    <title>Is there a tool for tracking niche trends?</title>
+    <link href="https://www.reddit.com/r/SaaS/comments/abc/is_there_a_tool/" />
+    <id>t3_abc</id>
+    <updated>2026-07-19T03:00:00+00:00</updated>
+  </entry>
+</feed>

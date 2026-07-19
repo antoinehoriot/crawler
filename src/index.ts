@@ -15,17 +15,20 @@ function redditAuthFromEnv(): RedditAuth | undefined {
   const clientSecret = process.env.REDDIT_CLIENT_SECRET
   const username = process.env.REDDIT_USERNAME
   if (!clientId || !clientSecret) {
-    console.log('[collect] reddit: no credentials, using public endpoints')
+    console.log('[collect] reddit: no credentials, using RSS/public fallback')
     return undefined
   }
   return { clientId, clientSecret, ...(username ? { username } : {}) }
 }
 
 async function collect(store: Store, config: Config): Promise<number> {
+  const redditAuth = redditAuthFromEnv()
+  // No-auth RSS/public tier: 429 measured at 50ms spacing on GitHub runner IPs, so pace slower.
+  const redditDelayMs = redditAuth ? 1000 : 2000
   const collectors: Collector[] = [
     googleTrendsCollector,
     hnCollector,
-    makeRedditCollector(config.subreddits, 1000, redditAuthFromEnv()),
+    makeRedditCollector(config.subreddits, redditDelayMs, redditAuth),
   ]
   let succeeded = 0
   for (const c of collectors) {

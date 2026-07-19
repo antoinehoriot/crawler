@@ -1,9 +1,10 @@
 import { describe, it, expect, vi, afterEach } from 'vitest'
 import { readFileSync } from 'node:fs'
-import { parseRedditTop, parseRedditAbout, makeRedditCollector } from '../src/collectors/reddit.js'
+import { parseRedditTop, parseRedditAbout, parseRedditRss, makeRedditCollector } from '../src/collectors/reddit.js'
 
 const top = JSON.parse(readFileSync('test/fixtures/reddit-top.json', 'utf8'))
 const about = JSON.parse(readFileSync('test/fixtures/reddit-about.json', 'utf8'))
+const rssAtom = readFileSync('test/fixtures/reddit-top.atom.xml', 'utf8')
 const AT = '2026-07-19T04:00:00.000Z'
 
 describe('parseRedditTop', () => {
@@ -58,6 +59,72 @@ describe('parseRedditAbout', () => {
 
   it('returns [] when subscribers is missing', () => {
     expect(parseRedditAbout({}, 'SaaS', AT)).toEqual([])
+  })
+})
+
+describe('parseRedditRss', () => {
+  it('maps Atom entries to feed-rank signals, top of feed strongest', () => {
+    const signals = parseRedditRss(rssAtom, AT)
+    expect(signals).toHaveLength(2)
+    expect(signals[0]).toEqual({
+      topic: 'My SaaS hit $1k MRR',
+      source: 'reddit',
+      metric: 'feed-rank',
+      value: 25,
+      url: 'https://www.reddit.com/r/SaaS/comments/def/my_saas/',
+      capturedAt: AT,
+    })
+    expect(signals[1]).toEqual({
+      topic: 'Is there a tool for tracking niche trends?',
+      source: 'reddit',
+      metric: 'feed-rank',
+      value: 24,
+      url: 'https://www.reddit.com/r/SaaS/comments/abc/is_there_a_tool/',
+      capturedAt: AT,
+    })
+  })
+
+  it('handles single-entry feeds (non-array parsing)', () => {
+    const soloAtom = `
+      <feed xmlns="http://www.w3.org/2005/Atom">
+        <entry>
+          <title>solo reddit post</title>
+          <link href="https://www.reddit.com/r/SaaS/comments/xyz/solo/" />
+        </entry>
+      </feed>
+    `
+    const signals = parseRedditRss(soloAtom, AT)
+    expect(signals).toHaveLength(1)
+    expect(signals[0]).toEqual({
+      topic: 'solo reddit post',
+      source: 'reddit',
+      metric: 'feed-rank',
+      value: 25,
+      url: 'https://www.reddit.com/r/SaaS/comments/xyz/solo/',
+      capturedAt: AT,
+    })
+  })
+
+  it('returns [] on garbage/non-Atom input', () => {
+    expect(parseRedditRss('not xml at all', AT)).toEqual([])
+    expect(parseRedditRss('<html><body>nope</body></html>', AT)).toEqual([])
+  })
+
+  it('skips entries without a title', () => {
+    const noTitleAtom = `
+      <feed xmlns="http://www.w3.org/2005/Atom">
+        <entry>
+          <link href="https://www.reddit.com/r/SaaS/comments/xyz/notitle/" />
+        </entry>
+        <entry>
+          <title>has a title</title>
+          <link href="https://www.reddit.com/r/SaaS/comments/xyz/hastitle/" />
+        </entry>
+      </feed>
+    `
+    const signals = parseRedditRss(noTitleAtom, AT)
+    expect(signals).toHaveLength(1)
+    expect(signals[0].topic).toBe('has a title')
   })
 })
 
@@ -130,6 +197,7 @@ describe('makeRedditCollector with OAuth', () => {
     const calls: string[] = []
     const mock = vi.fn(async (url: string) => {
       calls.push(url)
+      if (url.includes('.rss')) return new Response('', { status: 403 })
       if (url.includes('/top.json')) return jsonRes(top)
       if (url.includes('/about.json')) return jsonRes(about)
       throw new Error(`unexpected url ${url}`)
@@ -141,6 +209,79 @@ describe('makeRedditCollector with OAuth', () => {
     expect(calls).toContain('https://www.reddit.com/r/SaaS/top.json?t=day&limit=25')
     expect(calls).toContain('https://www.reddit.com/r/SaaS/about.json')
     expect(calls.every((u) => !u.includes('oauth.reddit.com') && !u.includes('access_token'))).toBe(true)
+  })
+})
+
+describe('makeRedditCollector without auth: RSS/public three-tier fallback', () => {
+  afterEach(() => vi.unstubAllGlobals())
+
+  function jsonRes(body: unknown): Response {
+    return new Response(JSON.stringify(body), { status: 200 })
+  }
+
+  it('uses RSS when it succeeds, and does not call public top.json for that sub', async () => {
+    const calls: string[] = []
+    const mock = vi.fn(async (url: string) => {
+      calls.push(url)
+      if (url.includes('.rss')) return new Response(rssAtom, { status: 200 })
+      if (url.includes('/about.json')) return jsonRes(about)
+      throw new Error(`unexpected url ${url}`)
+    })
+    vi.stubGlobal('fetch', mock)
+
+    const signals = await makeRedditCollector(['SaaS'], 0).collect()
+
+    expect(signals.some((s) => s.metric === 'feed-rank')).toBe(true)
+    expect(calls.some((u) => u.includes('.rss'))).toBe(true)
+    expect(calls.some((u) => u.includes('/top.json'))).toBe(false)
+  })
+
+  it('falls back to public top.json when RSS is 429-exhausted', async () => {
+    vi.useFakeTimers()
+    try {
+      let rssCalls = 0
+      const mock = vi.fn(async (url: string) => {
+        if (url.includes('.rss')) {
+          rssCalls++
+          return new Response('', { status: 429 })
+        }
+        if (url.includes('/top.json')) return jsonRes(top)
+        if (url.includes('/about.json')) return jsonRes(about)
+        throw new Error(`unexpected url ${url}`)
+      })
+      vi.stubGlobal('fetch', mock)
+
+      const promise = makeRedditCollector(['SaaS'], 0).collect()
+      await vi.runAllTimersAsync()
+      const signals = await promise
+
+      expect(rssCalls).toBe(3) // fetchWithRetry default retries, all 429
+      expect(signals.some((s) => s.metric === 'post-score')).toBe(true)
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('isolates a fully-failing subreddit: partial signals returned, no throw', async () => {
+    const mock = vi.fn(async (url: string) => {
+      if (url.includes('/r/Bad/')) return new Response('', { status: 403 })
+      if (url.includes('/r/Good/') && url.includes('.rss')) return new Response(rssAtom, { status: 200 })
+      if (url.includes('/r/Good/') && url.includes('/about.json')) return jsonRes(about)
+      throw new Error(`unexpected url ${url}`)
+    })
+    vi.stubGlobal('fetch', mock)
+
+    const signals = await makeRedditCollector(['Bad', 'Good'], 0).collect()
+
+    expect(signals.length).toBeGreaterThan(0)
+    expect(signals.some((s) => s.metric === 'feed-rank')).toBe(true)
+  })
+
+  it('throws naming the last error when every subreddit fails', async () => {
+    const mock = vi.fn(async () => new Response('', { status: 403 }))
+    vi.stubGlobal('fetch', mock)
+
+    await expect(makeRedditCollector(['Bad1', 'Bad2'], 0).collect()).rejects.toThrow(/403/)
   })
 })
 
