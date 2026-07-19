@@ -2,6 +2,13 @@ import { XMLParser } from 'fast-xml-parser'
 import { fetchWithRetry } from '../http.js'
 import type { Collector, Signal } from './types.js'
 
+// Reddit's CDN rejects bare-header clients; standard headers required for public RSS feed.
+const RSS_HEADERS = {
+  Accept: 'application/atom+xml,application/xml;q=0.9,*/*;q=0.8',
+  'Accept-Language': 'en-US,en;q=0.9',
+  'Accept-Encoding': 'gzip, deflate, br',
+}
+
 interface RedditPost {
   title?: string
   score?: number
@@ -128,7 +135,7 @@ export function makeRedditCollector(subreddits: string[], delayMs = 1000, auth?:
           let subSignals: Signal[]
           try {
             const rssUrl = `https://www.reddit.com/r/${sub}/top/.rss?t=day`
-            const rssRes = await fetchWithRetry(rssUrl)
+            const rssRes = await fetchWithRetry(rssUrl, { headers: RSS_HEADERS })
             subSignals = parseRedditRss(await rssRes.text(), capturedAt)
           } catch (rssErr) {
             lastErr = rssErr

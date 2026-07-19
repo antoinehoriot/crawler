@@ -220,9 +220,9 @@ describe('makeRedditCollector without auth: RSS/public three-tier fallback', () 
   }
 
   it('uses RSS when it succeeds, and does not call public top.json for that sub', async () => {
-    const calls: string[] = []
-    const mock = vi.fn(async (url: string) => {
-      calls.push(url)
+    const calls: { url: string; init: RequestInit }[] = []
+    const mock = vi.fn(async (url: string, init: RequestInit) => {
+      calls.push({ url, init })
       if (url.includes('.rss')) return new Response(rssAtom, { status: 200 })
       if (url.includes('/about.json')) return jsonRes(about)
       throw new Error(`unexpected url ${url}`)
@@ -232,8 +232,14 @@ describe('makeRedditCollector without auth: RSS/public three-tier fallback', () 
     const signals = await makeRedditCollector(['SaaS'], 0).collect()
 
     expect(signals.some((s) => s.metric === 'feed-rank')).toBe(true)
-    expect(calls.some((u) => u.includes('.rss'))).toBe(true)
-    expect(calls.some((u) => u.includes('/top.json'))).toBe(false)
+    expect(calls.some((c) => c.url.includes('.rss'))).toBe(true)
+    expect(calls.some((c) => c.url.includes('/top.json'))).toBe(false)
+
+    // Verify RSS request includes required headers
+    const rssCall = calls.find((c) => c.url.includes('.rss'))
+    expect(rssCall).toBeDefined()
+    const rssHeaders = rssCall!.init.headers as Record<string, string>
+    expect(rssHeaders['Accept']).toBe('application/atom+xml,application/xml;q=0.9,*/*;q=0.8')
   })
 
   it('falls back to public top.json when RSS is 429-exhausted', async () => {
