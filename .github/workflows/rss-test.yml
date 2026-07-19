@@ -1,0 +1,15 @@
+name: RSS reachability test (temporary)
+on:
+  workflow_dispatch:
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Probe Reddit RSS from a datacenter IP
+        run: |
+          for url in "https://www.reddit.com/r/SaaS/top/.rss?t=day" "https://www.reddit.com/r/Entrepreneur/top/.rss?t=day"; do
+            code=$(curl -s -o /tmp/out.xml -w '%{http_code}' -A 'trend-crawler/1.0 (personal research tool)' --max-time 15 "$url")
+            size=$(wc -c < /tmp/out.xml)
+            echo "$url -> HTTP $code, $size bytes"
+          done
+          head -c 200 /tmp/out.xml
