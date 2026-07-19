@@ -1,0 +1,7 @@
+{
+  "subreddits": ["Entrepreneur", "smallbusiness", "SaaS", "SideProject", "startups"],
+  "weights": { "crossSource": 0.4, "momentum": 0.3, "acceleration": 0.2, "novelty": 0.1 },
+  "windowDays": 7,
+  "minSnapshotDaysForVelocity": 2,
+  "topN": 30
+}
