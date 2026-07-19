@@ -28,6 +28,30 @@ describe('parseTrendsRss', () => {
   it('returns [] on non-RSS input', () => {
     expect(parseTrendsRss('<html>not rss</html>', AT)).toEqual([])
   })
+
+  it('handles single RSS item (non-array parsing)', () => {
+    const singleItemRss = `
+      <rss>
+        <channel>
+          <item>
+            <title>solo trend</title>
+            <ht:approx_traffic>500+</ht:approx_traffic>
+            <link>https://trends.google.com/trending?geo=US</link>
+          </item>
+        </channel>
+      </rss>
+    `
+    const signals = parseTrendsRss(singleItemRss, AT)
+    expect(signals).toHaveLength(1)
+    expect(signals[0]).toEqual({
+      topic: 'solo trend',
+      source: 'google-trends',
+      metric: 'search-traffic',
+      value: 500,
+      url: 'https://trends.google.com/trending?geo=US',
+      capturedAt: AT,
+    })
+  })
 })
 
 // live smoke: LIVE=1 npx vitest run test/googleTrends.test.ts
