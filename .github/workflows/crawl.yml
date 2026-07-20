@@ -1,7 +1,7 @@
 name: Daily crawl
 on:
   schedule:
-    - cron: '0 4 * * *'   # 06:00 Europe/Paris in summer (UTC-only cron; 05:00 in winter)
+    - cron: '23 4 * * *'  # ~06:23 Europe/Paris in summer (UTC-only cron; ~05:23 in winter). Off-peak minute: GitHub drops/delays top-of-hour schedules.
   workflow_dispatch:
 permissions:
   contents: write
