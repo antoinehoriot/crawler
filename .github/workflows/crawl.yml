@@ -31,3 +31,26 @@ jobs:
           git diff --cached --quiet || git commit -m "chore: daily crawl $(date -u +%F)"
           git pull --rebase
           git push
+      - name: Notify ntfy
+        if: always()
+        env:
+          NTFY_TOPIC: ${{ secrets.NTFY_TOPIC }}
+        run: |
+          [ -n "$NTFY_TOPIC" ] || { echo "no NTFY_TOPIC secret; skipping"; exit 0; }
+          today=$(date -u +%F)
+          report="reports/$today.md"
+          if [ "${{ job.status }}" = "success" ] && [ -f "$report" ]; then
+            top=$(awk -F'|' '$2 ~ /^ *[0-9]+ *$/ { gsub(/^ +| +$/, "", $3); print "- " $3 }' "$report" | head -5)
+            curl -s \
+              -H "Title: Trend digest $today" \
+              -H "Click: https://github.com/${{ github.repository }}/blob/main/$report" \
+              -d "$top" \
+              "https://ntfy.sh/$NTFY_TOPIC" > /dev/null
+          else
+            curl -s \
+              -H "Title: Trend crawl FAILED $today" \
+              -H "Priority: high" \
+              -H "Click: https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}" \
+              -d "Check the run logs." \
+              "https://ntfy.sh/$NTFY_TOPIC" > /dev/null
+          fi
